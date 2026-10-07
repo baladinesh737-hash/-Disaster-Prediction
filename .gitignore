@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+*.log
+users.xlsx
+backend/disaster_mgmt.db
+venv/
+.venv/
