@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GravityShift AI – Rescue Team Dashboard</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+  <script src="api.js"></script>
+  <style>
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 2rem; background: rgba(5,10,20,0.95);
+      border-bottom: 2px solid var(--green); position: sticky; top: 0; z-index: 100;
+    }
+    .header h1 { font-family: var(--title); font-size: 1.2rem; color: var(--green); }
+    .clock { font-family: var(--title); font-size: 0.85rem; color: var(--accent); }
+
+    .layout { display: grid; grid-template-columns: 360px 1fr; height: calc(100vh - 56px); }
+    .sidebar { padding: 1rem; border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; gap: 1rem; }
+    .main-area { overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 1rem; }
+
+    /* READY BUTTON */
+    .ready-btn {
+      width: 100%; padding: 1rem; font-size: 1rem; font-family: var(--title);
+      background: linear-gradient(135deg, var(--green), #00a855);
+      border: none; border-radius: 12px; color: #fff; cursor: pointer;
+      letter-spacing: .05em; transition: opacity .2s;
+    }
+    .ready-btn:hover { opacity: .85; }
+
+    /* FORM */
+    .rescue-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+    .rescue-form .full { grid-column: 1 / -1; }
+    .toggle-row { display: flex; gap: 0.5rem; }
+    .toggle-opt {
+      flex: 1; padding: 0.6rem; text-align: center; border-radius: 8px;
+      border: 1px solid var(--border); cursor: pointer; font-size: 0.82rem;
+      background: rgba(255,255,255,0.04); color: var(--dim); transition: all .2s;
+    }
+    .toggle-opt.yes { background: rgba(0,204,102,0.2); border-color: var(--green); color: var(--green); }
+    .toggle-opt.no  { background: rgba(255,59,59,0.15); border-color: var(--red); color: var(--red); }
+
+    /* ALERT CARDS */
+    .alert-card {
+      background: rgba(255,59,59,0.08); border: 1px solid rgba(255,59,59,0.3);
+      border-radius: 12px; padding: 1rem; margin-bottom: 0.8rem;
+    }
+    .alert-card.MEDIUM { background: rgba(255,149,0,0.08); border-color: rgba(255,149,0,0.3); }
+    .alert-card.LOW    { background: rgba(0,204,102,0.08); border-color: rgba(0,204,102,0.3); }
+    .alert-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem; }
+    .alert-city { font-weight: 700; font-size: 1rem; }
+    .alert-detail { font-size: .8rem; color: var(--dim); line-height: 1.6; }
+
+    /* SOS ASSIGNMENTS */
+    .sos-assign {
+      background: rgba(255,149,0,0.08); border: 1px solid rgba(255,149,0,0.3);
+      border-radius: 12px; padding: 1rem; margin-bottom: 0.8rem;
+    }
+    .sos-name { font-weight: 700; color: var(--orange); }
+    .sos-detail { font-size: .78rem; color: var(--dim); margin-top: .3rem; line-height: 1.6; }
+
+    #rescueMap { width: 100%; height: 380px; border-radius: 12px; }
+
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: .8rem; }
+    .refresh-btn { font-size: .75rem; padding: .3rem .7rem; }
+
+    .empty-state { text-align: center; color: var(--dim); font-size: .85rem; padding: 1.5rem 0; }
+
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+      .rescue-form { grid-template-columns: 1fr; }
+      .rescue-form .full { grid-column: 1; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div style="display:flex;align-items:center;gap:.8rem">
+    <h1>🛡 RESCUE TEAM DASHBOARD</h1>
+  </div>
+  <div style="display:flex;align-items:center;gap:1rem">
+    <span class="clock" id="clock">--:--:--</span>
+    <button class="btn btn-primary" style="font-size:.78rem;padding:.4rem .9rem" onclick="window.location.href='index.html'">← Home</button>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- SIDEBAR: READINESS FORM -->
+  <aside class="sidebar">
+    <div class="section-title">🛡 Rescue Team Ready</div>
+    <button class="ready-btn" onclick="toggleForm()">✅ Mark Team as Ready</button>
+
+    <div id="rescueFormWrap" class="hidden">
+      <div class="rescue-form">
+        <div class="form-group">
+          <label>Team Name *</label>
+          <input id="rTeam" placeholder="e.g. Alpha Squad"/>
+        </div>
+        <div class="form-group">
+          <label>Head Name *</label>
+          <input id="rHead" placeholder="Team leader name"/>
+        </div>
+        <div class="form-group">
+          <label>Phone Number *</label>
+          <input id="rPhone" placeholder="+91XXXXXXXXXX" type="tel"/>
+        </div>
+        <div class="form-group">
+          <label>Number of Members *</label>
+          <input id="rMembers" type="number" min="1" placeholder="e.g. 12"/>
+        </div>
+        <div class="form-group full">
+          <label>Assigned Location *</label>
+          <input id="rLocation" placeholder="District / Area"/>
+        </div>
+        <div class="form-group full">
+          <label>First Aid Ready?</label>
+          <div class="toggle-row">
+            <div class="toggle-opt" id="fa-yes" onclick="setToggle('fa','yes')">✅ Yes</div>
+            <div class="toggle-opt" id="fa-no"  onclick="setToggle('fa','no')">❌ No</div>
+          </div>
+        </div>
+        <div class="form-group full">
+          <label>Food Ready?</label>
+          <div class="toggle-row">
+            <div class="toggle-opt" id="fd-yes" onclick="setToggle('fd','yes')">✅ Yes</div>
+            <div class="toggle-opt" id="fd-no"  onclick="setToggle('fd','no')">❌ No</div>
+          </div>
+        </div>
+        <div class="full">
+          <button class="btn btn-success" style="width:100%" onclick="submitRescue()">📡 Submit to Admin</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main-area">
+
+    <!-- MAP -->
+    <div class="glass">
+      <div class="section-header">
+        <div class="section-title" style="margin:0">🗺 Live Risk Map</div>
+      </div>
+      <div id="rescueMap"></div>
+    </div>
+
+    <!-- ALERTS FROM ADMIN -->
+    <div class="glass">
+      <div class="section-header">
+        <div class="section-title" style="margin:0">🚨 Alerts from Admin</div>
+        <button class="btn refresh-btn" style="background:rgba(255,255,255,.1)" onclick="loadAlerts()">↻ Refresh</button>
+      </div>
+      <div id="alertsList"><div class="empty-state">No alerts yet</div></div>
+    </div>
+
+    <!-- SOS ASSIGNMENTS -->
+    <div class="glass">
+      <div class="section-header">
+        <div class="section-title" style="margin:0">🆘 SOS Assignments (Pending)</div>
+        <button class="btn refresh-btn" style="background:rgba(255,255,255,.1)" onclick="loadSOS()">↻ Refresh</button>
+      </div>
+      <div id="sosList"><div class="empty-state">No pending SOS</div></div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+let leafMap;
+let firstAid = "No", foodReady = "No";
+let formVisible = false;
+
+window.onload = function () {
+  startClock("clock");
+  leafMap = initLeafletMap("rescueMap");
+  loadAll();
+  setInterval(loadAll, 15000);
+};
+
+async function loadAll() {
+  await Promise.all([loadDistricts(), loadAlerts(), loadSOS()]);
+}
+
+async function loadDistricts() {
+  try { plotDistricts(leafMap, await apiGet("/all")); } catch (e) {}
+}
+
+async function loadAlerts() {
+  try {
+    const list = await apiGet("/alerts");
+    const box = document.getElementById("alertsList");
+    if (!list.length) { box.innerHTML = '<div class="empty-state">No alerts yet</div>'; return; }
+    box.innerHTML = list.slice().reverse().map(a => `
+      <div class="alert-card ${a.risk}">
+        <div class="alert-top">
+          <span class="alert-city">📍 ${a.city}</span>
+          <span class="risk-badge risk-${a.risk}">${a.risk}</span>
+        </div>
+        <div class="alert-detail">
+          ${a.message}<br>
+          🕐 ${a.start_time} → ${a.end_time}<br>
+          Rain: ${a.rain}mm | Sent: ${a.sent_at}
+        </div>
+      </div>`).join("");
+  } catch (e) {}
+}
+
+async function loadSOS() {
+  try {
+    const list = await apiGet("/sos-list");
+    const pending = list.filter(s => s.status === "PENDING");
+    const box = document.getElementById("sosList");
+    if (!pending.length) { box.innerHTML = '<div class="empty-state">No pending SOS</div>'; return; }
+    box.innerHTML = pending.map(s => `
+      <div class="sos-assign">
+        <div class="sos-name">🆘 ${s.name} (${s.city})</div>
+        <div class="sos-detail">
+          📞 ${s.phone} | 👨👩👧 ${s.family_members} members<br>
+          🏠 ${s.address}<br>
+          ⚠ ${s.problem}<br>
+          🕐 ${s.submitted_at}
+        </div>
+      </div>`).join("");
+  } catch (e) {}
+}
+
+function toggleForm() {
+  formVisible = !formVisible;
+  document.getElementById("rescueFormWrap").classList.toggle("hidden", !formVisible);
+}
+
+function setToggle(group, val) {
+  const yes = document.getElementById(`${group}-yes`);
+  const no  = document.getElementById(`${group}-no`);
+  yes.className = `toggle-opt ${val === 'yes' ? 'yes' : ''}`;
+  no.className  = `toggle-opt ${val === 'no'  ? 'no'  : ''}`;
+  if (group === "fa") firstAid  = val === "yes" ? "Yes" : "No";
+  if (group === "fd") foodReady = val === "yes" ? "Yes" : "No";
+}
+
+async function submitRescue() {
+  const payload = {
+    team_name:  document.getElementById("rTeam").value.trim(),
+    head_name:  document.getElementById("rHead").value.trim(),
+    phone:      document.getElementById("rPhone").value.trim(),
+    members:    parseInt(document.getElementById("rMembers").value) || 0,
+    location:   document.getElementById("rLocation").value.trim(),
+    first_aid:  firstAid,
+    food_ready: foodReady,
+  };
+  if (!payload.team_name || !payload.head_name || !payload.phone || !payload.location) {
+    showToast("Fill all required fields", "error"); return;
+  }
+  try {
+    const res = await apiPost("/rescue-update", payload);
+    showToast(`✅ Rescue update #${res.rescue_id} sent! ${res.notified} users notified`, "success");
+    toggleForm();
+  } catch (e) {
+    showToast(e.message || "Submission failed", "error");
+  }
+}
+</script>
+</body>
+</html>

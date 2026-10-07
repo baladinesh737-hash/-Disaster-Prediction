@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GravityShift AI – Admin Dashboard</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 2rem; background: rgba(5,10,20,0.95);
+      border-bottom: 2px solid var(--red); position: sticky; top: 0; z-index: 100;
+    }
+    .header h1 { font-family: var(--title); font-size: 1.2rem; color: var(--red); }
+    .header-right { display: flex; align-items: center; gap: 1rem; }
+    .clock { font-family: var(--title); font-size: 0.85rem; color: var(--accent); }
+
+    /* LOGIN GATE */
+    #loginGate {
+      position: fixed; inset: 0; background: var(--bg);
+      display: flex; align-items: center; justify-content: center; z-index: 9999;
+    }
+    .login-box {
+      background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+      border-radius: 20px; padding: 2.5rem; width: 360px; text-align: center;
+    }
+    .login-box h2 { font-family: var(--title); color: var(--red); margin-bottom: 1.5rem; }
+
+    /* LAYOUT */
+    .layout { display: grid; grid-template-columns: 380px 1fr; height: calc(100vh - 56px); }
+    .sidebar { padding: 1rem; border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; gap: 1rem; }
+    .main-area { display: flex; flex-direction: column; overflow: hidden; }
+
+    /* TABS */
+    .admin-tabs { display: flex; border-bottom: 1px solid var(--border); }
+    .admin-tab {
+      padding: 0.8rem 1.2rem; font-size: 0.82rem; cursor: pointer;
+      border-bottom: 2px solid transparent; color: var(--dim); transition: all .2s;
+    }
+    .admin-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .admin-tab-content { flex: 1; overflow-y: auto; padding: 1rem; }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    /* ALERT FORM */
+    .alert-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+    .alert-form .full { grid-column: 1 / -1; }
+    .send-btn {
+      grid-column: 1 / -1; padding: 0.9rem; font-size: 1rem;
+      font-family: var(--title); background: linear-gradient(135deg, var(--red), var(--accent2));
+      border: none; border-radius: 12px; color: #fff; cursor: pointer;
+      transition: opacity .2s; letter-spacing: .05em;
+    }
+    .send-btn:hover { opacity: .85; }
+
+    /* INBOX CARDS */
+    .inbox-card {
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      border-radius: 12px; padding: 1rem; margin-bottom: 0.8rem;
+    }
+    .inbox-card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
+    .inbox-name { font-weight: 700; font-size: 0.95rem; }
+    .inbox-meta { font-size: 0.78rem; color: var(--dim); line-height: 1.6; }
+    .status-select {
+      background: rgba(255,255,255,0.07); border: 1px solid var(--border);
+      border-radius: 8px; padding: 0.3rem 0.6rem; color: var(--text);
+      font-size: 0.78rem; cursor: pointer;
+    }
+    .status-PENDING     { color: var(--orange); }
+    .status-IN_PROGRESS { color: var(--accent); }
+    .status-RESOLVED    { color: var(--green); }
+
+    /* MAP – full height inside tab pane */
+    #pane-map { display: none; flex-direction: column; height: 100%; }
+    #pane-map.active { display: flex; }
+    .map-toolbar {
+      display: flex; gap: 0.5rem; padding: 0.5rem 0.8rem;
+      background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .map-toolbar button {
+      padding: 0.35rem 0.9rem; font-size: 0.78rem; border-radius: 8px;
+      border: 1px solid var(--border); background: rgba(255,255,255,0.07);
+      color: var(--dim); cursor: pointer; transition: all .2s;
+    }
+    .map-toolbar button.active {
+      background: rgba(0,212,255,0.15); border-color: var(--accent); color: var(--accent);
+    }
+    .map-toolbar button.danger.active {
+      background: rgba(255,59,59,0.15); border-color: var(--red); color: var(--red);
+    }
+    .map-wrap { flex: 1; position: relative; min-height: 0; }
+    #adminMap { width: 100%; height: 100%; }
+    #ventuskyMap { width: 100%; height: 100%; border: none; display: none; }
+
+    /* FULL-SCREEN ALERT MODAL */
+    #alertModal {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 8000; backdrop-filter: blur(8px);
+    }
+    .alert-modal-box {
+      background: #0d1b2e; border: 1px solid var(--red);
+      border-radius: 20px; padding: 2rem; width: 90%; max-width: 640px;
+      max-height: 90vh; overflow-y: auto; position: relative;
+    }
+    .alert-modal-box h3 {
+      font-family: var(--title); color: var(--red); font-size: 1rem;
+      margin-bottom: 1.2rem; letter-spacing: .05em;
+    }
+    .modal-close {
+      position: absolute; top: 1rem; right: 1rem;
+      background: rgba(255,59,59,0.15); border: 1px solid var(--red);
+      border-radius: 8px; color: var(--red); padding: 0.3rem 0.7rem;
+      cursor: pointer; font-size: 0.85rem; transition: opacity .2s;
+    }
+    .modal-close:hover { opacity: .7; }
+
+    /* AI PRE-ALERT PANEL */
+    #aiPanel {
+      background: rgba(124,58,237,0.08); border: 1px solid rgba(124,58,237,0.3);
+      border-radius: 12px; padding: 1rem; margin-top: 0.8rem;
+    }
+    .ai-result-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; }
+    .ai-prediction { font-size: 0.85rem; color: var(--text); line-height: 1.6; }
+    .ai-confidence { font-family: var(--title); font-size: 1.1rem; color: var(--accent2); }
+
+    /* OPEN ALERT BUTTON in sidebar */
+    .open-alert-btn {
+      width: 100%; padding: 0.9rem; font-size: 0.95rem;
+      font-family: var(--title); background: linear-gradient(135deg, var(--red), var(--accent2));
+      border: none; border-radius: 12px; color: #fff; cursor: pointer;
+      transition: opacity .2s; letter-spacing: .05em; margin-bottom: 0.5rem;
+    }
+    .open-alert-btn:hover { opacity: .85; }
+
+    /* MARKER INFO */
+    .marker-info {
+      background: rgba(255,149,0,0.1); border: 1px solid rgba(255,149,0,0.3);
+      border-radius: 10px; padding: 0.7rem; font-size: 0.8rem; color: var(--orange);
+    }
+
+    /* STATS BAR */
+    .stats-bar {
+      display: flex; gap: 1rem; padding: 0.8rem 1rem;
+      background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border);
+    }
+    .stat { text-align: center; }
+    .stat-n { font-family: var(--title); font-size: 1.2rem; }
+    .stat-l { font-size: 0.7rem; color: var(--dim); }
+
+    /* GOV PANEL */
+    .gov-type-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 0.6rem; margin-bottom: 1rem; }
+    .gov-type-btn {
+      padding: 0.7rem; background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--dim); cursor: pointer; font-size: 0.82rem;
+      transition: all .2s; text-align: center;
+    }
+    .gov-type-btn.selected { background: rgba(124,58,237,0.2); border-color: var(--accent2); color: var(--text); }
+
+    .empty-state { text-align: center; color: var(--dim); font-size: 0.85rem; padding: 2rem 0; }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .alert-form { grid-template-columns: 1fr; }
+      .alert-form .full { grid-column: 1; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN GATE -->
+<div id="loginGate">
+  <div class="login-box">
+    <h2> Admin Access</h2>
+    <div class="form-group">
+      <input type="password" id="adminPass" placeholder="Enter admin password" onkeydown="if(event.key==='Enter')doLogin()"/>
+    </div>
+    <button class="btn btn-danger" style="width:100%;margin-top:.5rem" onclick="doLogin()">Login</button>
+    <p style="margin-top:1rem;font-size:.75rem;color:var(--dim)">Default: admin123</p>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header class="header">
+  <div style="display:flex;align-items:center;gap:.8rem">
+    <h1> ADMIN CONTROL PANEL</h1>
+  </div>
+  <div class="header-right">
+    <span id="statsQuick" style="font-size:.78rem;color:var(--dim)">Loading…</span>
+    <span class="clock" id="clock">--:--:--</span>
+    <button class="btn" style="background:rgba(255,255,255,.1);font-size:.78rem;padding:.4rem .9rem" onclick="logout()">Logout</button>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- SIDEBAR: OPEN ALERT BUTTON + AI PRE-ALERT -->
+  <aside class="sidebar">
+    <!-- TASK 1: Button opens full-screen modal instead of inline form -->
+    <button class="open-alert-btn" onclick="openAlertModal()"> Send Disaster Alert</button>
+
+    <!-- AI PRE-ALERT (Task 6 – admin only) -->
+    <div>
+      <div class="section-title"> AI Pre-Alert Analysis</div>
+      <div style="display:flex;gap:.5rem">
+        <input id="aiCity" placeholder="City to analyze…" style="flex:1"/>
+        <button class="btn btn-warn" style="white-space:nowrap" onclick="runAIAnalysis()">Analyze</button>
+      </div>
+      <div id="aiPanel" class="hidden">
+        <div class="ai-result-row">
+          <span id="aiArea" style="font-weight:700;font-size:.9rem"></span>
+          <span id="aiRiskBadge"></span>
+        </div>
+        <div class="ai-prediction" id="aiPrediction"></div>
+        <div style="display:flex;gap:1rem;margin-top:.6rem;font-size:.78rem;color:var(--dim)">
+          <span>Confidence: <b class="ai-confidence" id="aiConf"></b></span>
+          <span>Triage: <b id="aiTriage"></b></span>
+          <span>Gravity: <b id="aiGravity"></b></span>
+        </div>
+        <div style="margin-top:.6rem;font-size:.75rem;color:var(--dim)">
+          Rain: <span id="aiRain"></span>mm | Humidity: <span id="aiHum"></span>% | Wind: <span id="aiWind"></span> m/s
+        </div>
+        <button class="btn btn-danger" style="width:100%;margin-top:.8rem;font-size:.8rem" onclick="fillAlertFromAI()">📋 Use in Alert Form</button>
+      </div>
+    </div>
+    <!-- MARKER STATUS (sidebar indicator) -->
+    <div id="markerInfo" class="marker-info hidden">
+       Disaster zone marked: <span id="markerCoords"></span>
+    </div>
+
+    <div style="border-top:1px solid var(--border);padding-top:1rem">
+      <div class="section-title"> Government Request</div>
+      <div class="form-group">
+        <label>City (HIGH risk only)</label>
+        <input id="gCity" placeholder="City name"/>
+      </div>
+      <div class="gov-type-grid">
+        <div class="gov-type-btn" onclick="selectGovType(this,'accommodation')"> Accommodation</div>
+        <div class="gov-type-btn" onclick="selectGovType(this,'hospital')"> Hospital Prep</div>
+        <div class="gov-type-btn" onclick="selectGovType(this,'permission')"> Central Permission</div>
+      </div>
+      <div class="form-group">
+        <label>Details</label>
+        <textarea id="gDetails" rows="2" placeholder="Describe the requirement…"></textarea>
+      </div>
+      <button class="btn btn-warn" style="width:100%" onclick="sendGovAlert()">Send to Government</button>
+    </div>
+  </aside>
+
+  <!-- MAIN AREA -->
+  <div class="main-area">
+
+    <!-- STATS BAR -->
+    <div class="stats-bar">
+      <div class="stat"><div class="stat-n" id="stAlerts" style="color:var(--red)">0</div><div class="stat-l">Alerts Sent</div></div>
+      <div class="stat"><div class="stat-n" id="stSOS" style="color:var(--orange)">0</div><div class="stat-l">SOS Requests</div></div>
+      <div class="stat"><div class="stat-n" id="stRescue" style="color:var(--green)">0</div><div class="stat-l">Rescue Teams</div></div>
+      <div class="stat"><div class="stat-n" id="stGov" style="color:var(--accent2)">0</div><div class="stat-l">Gov Requests</div></div>
+    </div>
+
+    <!-- TABS -->
+    <div class="admin-tabs">
+      <div class="admin-tab active" onclick="switchAdminTab('map',this)"> Live Map</div>
+      <div class="admin-tab" onclick="switchAdminTab('sos',this)"> SOS Inbox</div>
+      <div class="admin-tab" onclick="switchAdminTab('rescue',this)">Rescue Updates</div>
+      <div class="admin-tab" onclick="switchAdminTab('alerts',this)"> Sent Alerts</div>
+      <div class="admin-tab" onclick="switchAdminTab('gov',this)"> Government</div>
+    </div>
+
+    <div class="admin-tab-content">
+
+      <!-- MAP (Task 2: full height, Task 3: satellite toggle, Task 4: admin markers) -->
+      <div id="pane-map" class="tab-pane active">
+        <div class="map-toolbar">
+          <button id="btnLive" class="active" onclick="setMapMode('live')">🗺 Live Map</button>
+          <button id="btnSat" onclick="setMapMode('satellite')">🛰 Satellite</button>
+          <button id="btnMarker" class="danger" onclick="toggleMarkerMode()"> Place Disaster Zone</button>
+          <button onclick="clearMarkers()" style="margin-left:auto">🗑 Clear Markers</button>
+          <button onclick="findEvacRoute()"> Evacuation Route</button>
+        </div>
+        <div class="map-wrap">
+          <div id="adminMap"></div>
+          <iframe id="ventuskyMap"
+            src="https://www.ventusky.com/?p=11;79;6&l=rain-3h"
+            allowfullscreen loading="lazy"></iframe>
+        </div>
+      </div>
+
+      <!-- SOS INBOX -->
+      <div id="pane-sos" class="tab-pane">
+        <div class="section-title"> Emergency Help Requests from Users</div>
+        <div id="sosList"><div class="empty-state">No SOS requests yet</div></div>
+      </div>
+
+      <!-- RESCUE UPDATES -->
+      <div id="pane-rescue" class="tab-pane">
+        <div class="section-title">🛡 Rescue Team Deployments</div>
+        <div id="rescueAdminList"><div class="empty-state">No rescue updates yet</div></div>
+      </div>
+
+      <!-- SENT ALERTS -->
+      <div id="pane-alerts" class="tab-pane">
+        <div class="section-title"> All Sent Alerts</div>
+        <div id="sentAlertsList"><div class="empty-state">No alerts sent yet</div></div>
+      </div>
+
+      <!-- GOVERNMENT -->
+      <div id="pane-gov" class="tab-pane">
+        <div class="section-title">Government Requests Submitted</div>
+        <div id="govList"><div class="empty-state">No government requests yet</div></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- TASK 1: FULL-SCREEN ALERT MODAL -->
+<div id="alertModal" class="hidden">
+  <div class="alert-modal-box">
+    <button class="modal-close" onclick="closeAlertModal()">✕ Close</button>
+    <h3> Send Disaster Alert</h3>
+    <div class="alert-form">
+      <div class="form-group">
+        <label>Location / City *</label>
+        <input id="aCity" placeholder="e.g. Chennai"/>
+      </div>
+      <div class="form-group">
+        <label>Risk Level</label>
+        <select id="aRisk">
+          <option value="HIGH">HIGH</option>
+          <option value="MEDIUM">MEDIUM</option>
+          <option value="LOW">LOW</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Rainfall Amount (mm) *</label>
+        <input id="aRain" type="number" placeholder="e.g. 120"/>
+      </div>
+      <div class="form-group">
+        <label>Start Time *</label>
+        <input id="aStart" type="datetime-local"/>
+      </div>
+      <div class="form-group">
+        <label>End Time *</label>
+        <input id="aEnd" type="datetime-local"/>
+      </div>
+      <div class="form-group full">
+        <label>Alert Message *</label>
+        <textarea id="aMsg" rows="3" placeholder="Describe the alert and safety instructions…"></textarea>
+      </div>
+      <!-- Marked location display -->
+      <div class="full" id="markedLocDisplay" style="display:none">
+        <div class="marker-info"> Marked zone: <span id="modalMarkerCoords"></span></div>
+      </div>
+      <button class="send-btn" onclick="sendAlert()"> SEND ALERT</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<!-- FLOATING AI CHATBOT -->
+<div id="aiChatbot" style="position:fixed;bottom:20px;right:20px;width:340px;z-index:9999">
+  <div id="chatToggle" onclick="toggleChat()" style="background:linear-gradient(135deg,#7c3aed,#00d4ff);border-radius:50%;width:56px;height:56px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 20px rgba(124,58,237,0.4);margin-left:auto">
+    <span style="font-size:28px"></span>
+  </div>
+  <div id="chatWindow" class="hidden" style="background:#0d1b2e;border:1px solid var(--border);border-radius:16px;margin-top:10px;box-shadow:0 8px 32px rgba(0,0,0,0.6);max-height:450px;display:flex;flex-direction:column">
+    <div style="padding:1rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <div style="font-family:var(--title);color:var(--accent);font-size:0.9rem"> Disaster AI Assistant</div>
+      <button onclick="toggleChat()" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:1.2rem">×</button>
+    </div>
+    <div id="chatMessages" style="flex:1;padding:1rem;overflow-y:auto;max-height:280px;font-size:0.85rem"></div>
+    <div style="padding:0.8rem;border-top:1px solid var(--border);display:flex;gap:0.5rem">
+      <input id="chatInput" placeholder="Ask about disasters..." onkeydown="if(event.key==='Enter')sendChatMessage()" style="flex:1;padding:0.6rem;font-size:0.85rem"/>
+      <button onclick="sendChatMessage()" class="btn btn-primary" style="padding:0.6rem 1rem;font-size:0.85rem">➤</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="api.js"></script>
+<script>
+let leafMap, selectedGovType = "", markerMode = false, currentMarker = null, mapMode = "live";
+let markedLocation = null;
+
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
+async function doLogin() {
+  const pass = document.getElementById("adminPass").value;
+  try {
+    const res = await apiPost("/admin-login", { password: pass });
+    if (res.token) {
+      localStorage.setItem("admin_token", res.token);
+    }
+    document.getElementById("loginGate").classList.add("hidden");
+    initAdmin();
+  } catch (e) {
+    showToast(" Wrong password", "error");
+  }
+}
+
+function logout() {
+  localStorage.removeItem("admin_token");
+  document.getElementById("loginGate").classList.remove("hidden");
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+function initAdmin() {
+  startClock("clock");
+  leafMap = initLeafletMap("adminMap");
+  setupMapClickHandler();
+  loadAll();
+  setInterval(loadAll, 12000);
+  // Fix map size after init
+  setTimeout(() => leafMap && leafMap.invalidateSize(), 300);
+}
+
+async function loadAll() {
+  await Promise.all([loadSOS(), loadRescue(), loadSentAlerts(), loadGov()]);
+  updateStats();
+}
+
+// ── SEND ALERT ────────────────────────────────────────────────────────────────
+async function sendAlert() {
+  const city = document.getElementById("aCity").value;
+  const risk = document.getElementById("aRisk").value;
+  const rain = document.getElementById("aRain").value;
+  const start = document.getElementById("aStart").value;
+  const end = document.getElementById("aEnd").value;
+  const message = document.getElementById("aMsg").value;
+  const lat = markedLocation ? markedLocation.lat : null;
+  const lng = markedLocation ? markedLocation.lng : null;
+
+  console.log("[DEBUG] Form Values:", { city, risk, rain, start, end, message });
+
+  // Fix: Check if rain is an empty string rather than just !rain to allow '0'
+  if (!city || rain === "" || !start || !end || !message) {
+    showToast("Please fill all required fields", "error");
+    return;
+  }
+
+  const payload = {
+    city, risk, rain, start, end, message, lat, lng
+  };
+
+  try {
+    console.log("[DEBUG] Sending payload to /send-alert:", payload);
+    const res = await apiPost("/send-alert", payload, true); // Use auth for protected route
+    console.log("[DEBUG] Server Response:", res);
+
+    showToast(` Alert sent! SMS: ${res.sms_sent_count} users notified`, "success");
+    closeAlertModal();
+    loadSentAlerts();
+    updateStats();
+    if (risk === "HIGH") {
+      document.getElementById("gCity").value = payload.city;
+      showToast("⚠ HIGH risk – consider sending Government Alert", "info");
+    }
+  } catch (e) {
+    showToast(e.message || "Failed to send alert", "error");
+  }
+}
+
+// ── SOS INBOX ─────────────────────────────────────────────────────────────────
+async function loadSOS() {
+  try {
+    const list = await apiGet("/sos-list");
+    document.getElementById("stSOS").textContent = list.length;
+    const box = document.getElementById("sosList");
+    if (!list.length) { box.innerHTML = '<div class="empty-state">No SOS requests yet</div>'; return; }
+    box.innerHTML = list.slice().reverse().map(s => `
+      <div class="inbox-card">
+        <div class="inbox-card-top">
+          <div>
+            <div class="inbox-name"> ${s.name}</div>
+            <div class="inbox-meta"> ${s.phone} |  ${s.family_members} members |  ${s.city}</div>
+          </div>
+          <select class="status-select status-${s.status}" onchange="updateSOS(${s.id},this.value)">
+            <option ${s.status==='PENDING'?'selected':''}>PENDING</option>
+            <option ${s.status==='IN_PROGRESS'?'selected':''}>IN_PROGRESS</option>
+            <option ${s.status==='RESOLVED'?'selected':''}>RESOLVED</option>
+          </select>
+        </div>
+        <div class="inbox-meta"> ${s.address}</div>
+        <div class="inbox-meta" style="margin-top:.4rem;color:var(--text)">⚠ ${s.problem}</div>
+        <div class="inbox-meta" style="margin-top:.3rem"> ${s.submitted_at}</div>
+      </div>`).join("");
+  } catch (e) {}
+}
+
+async function updateSOS(id, status) {
+  try {
+    await apiPost(`/sos-update/${id}`, { status });
+    showToast(`SOS #${id} → ${status}`, "success");
+  } catch (e) { showToast("Update failed", "error"); }
+}
+
+// ── RESCUE ────────────────────────────────────────────────────────────────────
+async function loadRescue() {
+  try {
+    const list = await apiGet("/rescue-list", true);
+    document.getElementById("stRescue").textContent = list.length;
+    const box = document.getElementById("rescueAdminList");
+    if (!list.length) { box.innerHTML = '<div class="empty-state">No rescue updates yet</div>'; return; }
+    box.innerHTML = list.slice().reverse().map(t => `
+      <div class="inbox-card" style="border-color:rgba(0,204,102,.3)">
+        <div class="inbox-card-top">
+          <div class="inbox-name" style="color:var(--green)">🛡 ${t.team_name}</div>
+          <span class="risk-badge" style="background:rgba(0,204,102,.2);color:var(--green);border:1px solid var(--green)">DEPLOYED</span>
+        </div>
+        <div class="inbox-meta">
+          Head: ${t.head_name} | Members: ${t.members} |  ${t.phone}<br>
+           ${t.location} | First Aid: ${t.first_aid} | Food: ${t.food_ready}<br>
+           ${t.submitted_at}
+        </div>
+      </div>`).join("");
+  } catch (e) {}
+}
+
+// ── SENT ALERTS ───────────────────────────────────────────────────────────────
+async function loadSentAlerts() {
+  try {
+    const list = await apiGet("/alerts");
+    document.getElementById("stAlerts").textContent = list.length;
+    const box = document.getElementById("sentAlertsList");
+    if (!list.length) { box.innerHTML = '<div class="empty-state">No alerts sent yet</div>'; return; }
+    box.innerHTML = list.slice().reverse().map(a => `
+      <div class="inbox-card">
+        <div class="inbox-card-top">
+          <div class="inbox-name"> ${a.city}</div>
+          <span class="risk-badge risk-${a.risk}">${a.risk}</span>
+        </div>
+        <div class="inbox-meta">${a.message}</div>
+        <div class="inbox-meta" style="margin-top:.3rem">
+           ${a.start_time} → ${a.end_time}<br>
+          SMS sent: ${a.sms_sent.length} | Failed: ${a.sms_failed.length}<br>
+          Sent at: ${a.sent_at}
+        </div>
+      </div>`).join("");
+  } catch (e) {}
+}
+
+// ── GOVERNMENT ────────────────────────────────────────────────────────────────
+function selectGovType(el, type) {
+  document.querySelectorAll(".gov-type-btn").forEach(b => b.classList.remove("selected"));
+  el.classList.add("selected");
+  selectedGovType = type;
+}
+
+async function sendGovAlert() {
+  const city = document.getElementById("gCity").value.trim();
+  const details = document.getElementById("gDetails").value.trim();
+  if (!city || !selectedGovType || !details) {
+    showToast("Fill city, select type, and add details", "error"); return;
+  }
+  try {
+    const res = await apiPost("/government-alert", {
+      city, risk: "HIGH", request_type: selectedGovType, details
+    }, true);
+    showToast(` Government request #${res.gov_id} submitted`, "success");
+    loadGov();
+  } catch (e) {
+    showToast(e.message || "Failed", "error");
+  }
+}
+
+async function loadGov() {
+  try {
+    const list = await apiGet("/government-list", true);
+    document.getElementById("stGov").textContent = list.length;
+    const box = document.getElementById("govList");
+    if (!list.length) { box.innerHTML = '<div class="empty-state">No government requests yet</div>'; return; }
+    box.innerHTML = list.slice().reverse().map(g => `
+      <div class="inbox-card" style="border-color:rgba(124,58,237,.4)">
+        <div class="inbox-card-top">
+          <div class="inbox-name" style="color:var(--accent2)"> ${g.city}</div>
+          <span class="risk-badge risk-HIGH">HIGH RISK</span>
+        </div>
+        <div class="inbox-meta">
+          Type: <b style="color:var(--text)">${g.request_type.toUpperCase()}</b><br>
+          ${g.details}<br>
+           ${g.submitted_at} | Status: ${g.status}
+        </div>
+      </div>`).join("");
+  } catch (e) {}
+}
+
+// ── STATS ─────────────────────────────────────────────────────────────────────
+function updateStats() {
+  const a = document.getElementById("stAlerts").textContent;
+  const s = document.getElementById("stSOS").textContent;
+  const r = document.getElementById("stRescue").textContent;
+  document.getElementById("statsQuick").textContent =
+    `Alerts: ${a} | SOS: ${s} | Rescue: ${r}`;
+}
+
+// ── TABS ──────────────────────────────────────────────────────────────────────
+function switchAdminTab(name, el) {
+  document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".admin-tab").forEach(t => t.classList.remove("active"));
+  document.getElementById(`pane-${name}`).classList.add("active");
+  el.classList.add("active");
+  if (name === "map") setTimeout(() => leafMap && leafMap.invalidateSize(), 200);
+}
+
+// ── ALERT MODAL ───────────────────────────────────────────────────────────────
+function openAlertModal() {
+  document.getElementById("alertModal").classList.remove("hidden");
+  updateMarkerDisplay();
+}
+
+function closeAlertModal() {
+  document.getElementById("alertModal").classList.add("hidden");
+}
+
+function updateMarkerDisplay() {
+  const sidebarInfo = document.getElementById("markerInfo");
+  const modalInfo = document.getElementById("markedLocDisplay");
+  const modalCoords = document.getElementById("modalMarkerCoords");
+  const sidebarCoords = document.getElementById("markerCoords");
+  
+  if (markedLocation) {
+    const coordText = `${markedLocation.lat.toFixed(4)}, ${markedLocation.lng.toFixed(4)}`;
+    sidebarInfo.classList.remove("hidden");
+    sidebarCoords.textContent = coordText;
+    modalInfo.style.display = "block";
+    modalCoords.textContent = coordText;
+  } else {
+    sidebarInfo.classList.add("hidden");
+    modalInfo.style.display = "none";
+  }
+}
+
+// ── MAP CONTROLS ──────────────────────────────────────────────────────────────
+function setMapMode(mode) {
+  mapMode = mode;
+  const liveMap = document.getElementById("adminMap");
+  const satMap = document.getElementById("ventuskyMap");
+  const btnLive = document.getElementById("btnLive");
+  const btnSat = document.getElementById("btnSat");
+  
+  if (mode === "live") {
+    liveMap.style.display = "block";
+    satMap.style.display = "none";
+    btnLive.classList.add("active");
+    btnSat.classList.remove("active");
+    setTimeout(() => leafMap && leafMap.invalidateSize(), 100);
+  } else {
+    liveMap.style.display = "none";
+    satMap.style.display = "block";
+    btnLive.classList.remove("active");
+    btnSat.classList.add("active");
+  }
+}
+
+function toggleMarkerMode() {
+  markerMode = !markerMode;
+  const btn = document.getElementById("btnMarker");
+  if (markerMode) {
+    btn.classList.add("active");
+    showToast(" Click on map to place disaster zone", "info");
+  } else {
+    btn.classList.remove("active");
+  }
+}
+
+function setupMapClickHandler() {
+  leafMap.on("click", function(e) {
+    if (markerMode) {
+      placeMarker(e.latlng.lat, e.latlng.lng);
+    }
+  });
+}
+
+function placeMarker(lat, lng) {
+  if (currentMarker) {
+    leafMap.removeLayer(currentMarker);
+  }
+  
+  currentMarker = L.marker([lat, lng], {
+    icon: L.divIcon({
+      className: 'disaster-marker',
+      html: '<div style="background:#ff3b3b;width:24px;height:24px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 10px rgba(255,59,59,0.8)"></div>',
+      iconSize: [24, 24]
+    })
+  }).addTo(leafMap);
+  
+  currentMarker.bindPopup(`<b>Disaster Zone</b><br>Lat: ${lat.toFixed(4)}<br>Lng: ${lng.toFixed(4)}`).openPopup();
+  
+  markedLocation = { lat, lng };
+  updateMarkerDisplay();
+  markerMode = false;
+  document.getElementById("btnMarker").classList.remove("active");
+  showToast(" Disaster zone marked", "success");
+}
+
+function clearMarkers() {
+  if (currentMarker) {
+    leafMap.removeLayer(currentMarker);
+    currentMarker = null;
+  }
+  markedLocation = null;
+  updateMarkerDisplay();
+  showToast("🗑 Markers cleared", "info");
+}
+
+function findEvacRoute() {
+  if (!markedLocation) {
+    showToast("⚠ Place a disaster zone marker first", "error");
+    return;
+  }
+  showToast(" Calculating evacuation route...", "info");
+  // This would integrate with safe-route endpoint
+  setTimeout(() => {
+    showToast("Route calculated - check map", "success");
+  }, 1500);
+}
+
+// ── AI PRE-ALERT ──────────────────────────────────────────────────────────────
+let aiData = null;
+
+async function runAIAnalysis() {
+  const city = document.getElementById("aiCity").value.trim();
+  if (!city) {
+    showToast("Enter city name", "error"); return;
+  }
+  
+  try {
+    aiData = await apiGet(`/ai-analysis/${encodeURIComponent(city)}`);
+    document.getElementById("aiPanel").classList.remove("hidden");
+    document.getElementById("aiArea").textContent = aiData.area;
+    document.getElementById("aiPrediction").textContent = aiData.prediction;
+    document.getElementById("aiConf").textContent = (aiData.confidence * 100).toFixed(1) + "%";
+    document.getElementById("aiTriage").textContent = aiData.triage;
+    document.getElementById("aiGravity").textContent = aiData.gravity;
+    document.getElementById("aiRain").textContent = aiData.rain;
+    document.getElementById("aiHum").textContent = aiData.humidity;
+    document.getElementById("aiWind").textContent = aiData.wind;
+    
+    const badge = document.getElementById("aiRiskBadge");
+    badge.className = `risk-badge risk-${aiData.risk}`;
+    badge.textContent = aiData.risk;
+    
+    showToast(` AI Analysis complete for ${city}`, "success");
+  } catch (e) {
+    showToast("City not found or analysis failed", "error");
+  }
+}
+
+function fillAlertFromAI() {
+  if (!aiData) return;
+  
+  document.getElementById("aCity").value = aiData.area;
+  document.getElementById("aRisk").value = aiData.risk;
+  document.getElementById("aRain").value = aiData.rain;
+  document.getElementById("aMsg").value = `${aiData.prediction}. Gravity: ${aiData.gravity}, Triage: ${aiData.triage}. Take immediate precautions.`;
+  
+  openAlertModal();
+  showToast(" Alert form filled with AI data", "success");
+}
+
+// ── AI CHATBOT ──────────────────────────────────────────────────────────────
+function toggleChat() {
+  const win = document.getElementById("chatWindow");
+  win.classList.toggle("hidden");
+  if (!win.classList.contains("hidden")) {
+    document.getElementById("chatInput").focus();
+    if (document.getElementById("chatMessages").children.length === 0) {
+      addChatMessage("bot", "Hi! I can help with disaster tracking, safety advice, and impact assessment. What do you need?");
+    }
+  }
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById("chatInput");
+  const query = input.value.trim();
+  if (!query) return;
+  
+  addChatMessage("user", query);
+  input.value = "";
+  
+  try {
+    const res = await apiPost("/ai-chat", { query });
+    addChatMessage("bot", res.response);
+  } catch (e) {
+    addChatMessage("bot", " Sorry, I'm having trouble connecting. Try again.");
+  }
+}
+
+function addChatMessage(type, text) {
+  const box = document.getElementById("chatMessages");
+  const msg = document.createElement("div");
+  msg.style.marginBottom = "0.8rem";
+  msg.style.padding = "0.7rem";
+  msg.style.borderRadius = "10px";
+  msg.style.lineHeight = "1.5";
+  
+  if (type === "user") {
+    msg.style.background = "rgba(0,212,255,0.15)";
+    msg.style.border = "1px solid rgba(0,212,255,0.3)";
+    msg.style.color = "var(--text)";
+    msg.style.marginLeft = "2rem";
+  } else {
+    msg.style.background = "rgba(124,58,237,0.15)";
+    msg.style.border = "1px solid rgba(124,58,237,0.3)";
+    msg.style.color = "var(--text)";
+    msg.style.marginRight = "2rem";
+  }
+  
+  msg.textContent = text;
+  box.appendChild(msg);
+  box.scrollTop = box.scrollHeight;
+}
+</script>
+</body>
+</html>

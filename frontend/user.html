@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GravityShift AI – User Dashboard</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+  <script src="api.js"></script>
+  <style>
+    body { background: var(--bg); }
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 2rem; background: rgba(5,10,20,0.95);
+      border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100;
+    }
+    .header h1 { font-family: var(--title); font-size: 1.2rem;
+      background: linear-gradient(135deg,var(--accent),var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .header-right { display: flex; align-items: center; gap: 1rem; }
+    .status-dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; }
+    .status-text { font-size: 0.78rem; color: var(--green); }
+    .clock { font-family: var(--title); font-size: 0.85rem; color: var(--accent); }
+
+    .layout { display: grid; grid-template-columns: 320px 1fr; height: calc(100vh - 56px); }
+
+    /* SIDEBAR */
+    .sidebar {
+      padding: 1.2rem; border-right: 1px solid var(--border);
+      overflow-y: auto; display: flex; flex-direction: column; gap: 1rem;
+    }
+    .city-search { display: flex; gap: 0.5rem; }
+    .city-search input { flex: 1; }
+    .city-search button { padding: 0.7rem 1rem; white-space: nowrap; }
+
+    .result-box { padding: 1rem; border-radius: 12px; border: 1px solid var(--border); }
+    .result-city { font-family: var(--title); font-size: 1.1rem; color: var(--text); }
+    .result-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.8rem; }
+    .stat-chip { background: rgba(255,255,255,0.05); border-radius: 8px; padding: 0.5rem; text-align: center; }
+    .stat-chip .val { font-size: 1rem; font-weight: 700; }
+    .stat-chip .lbl { font-size: 0.7rem; color: var(--dim); }
+
+    .sos-btn {
+      width: 100%; padding: 1rem; font-size: 1rem; font-family: var(--title);
+      background: linear-gradient(135deg, #ff3b3b, #7c3aed);
+      border: none; border-radius: 12px; color: #fff; cursor: pointer;
+      animation: glow 2s infinite;
+    }
+    @keyframes glow {
+      0%,100% { box-shadow: 0 0 10px rgba(255,59,59,0.4); }
+      50%      { box-shadow: 0 0 25px rgba(255,59,59,0.8); }
+    }
+
+    /* ALERTS PANEL */
+    .alerts-panel { padding: 0.5rem 0; }
+    .alert-card {
+      background: rgba(255,59,59,0.08); border: 1px solid rgba(255,59,59,0.3);
+      border-radius: 12px; padding: 0.9rem; margin-bottom: 0.7rem;
+    }
+    .alert-card.MEDIUM { background: rgba(255,149,0,0.08); border-color: rgba(255,149,0,0.3); }
+    .alert-card.LOW    { background: rgba(0,204,102,0.08); border-color: rgba(0,204,102,0.3); }
+    .alert-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; }
+    .alert-city-name { font-weight: 700; font-size: 0.95rem; }
+    .alert-time { font-size: 0.72rem; color: var(--dim); }
+    .alert-msg { font-size: 0.82rem; color: var(--dim); }
+    .alert-period { font-size: 0.75rem; color: var(--accent); margin-top: 0.3rem; }
+
+    /* RESCUE STATUS */
+    .rescue-card {
+      background: rgba(0,204,102,0.08); border: 1px solid rgba(0,204,102,0.3);
+      border-radius: 12px; padding: 0.9rem; margin-bottom: 0.7rem;
+    }
+    .rescue-team { font-weight: 700; font-size: 0.9rem; color: var(--green); }
+    .rescue-info { font-size: 0.78rem; color: var(--dim); margin-top: 0.3rem; }
+
+    /* MAP */
+    .map-area { position: relative; }
+    #map { width: 100%; height: 100%; }
+
+    /* EVACUATION CENTER CARDS */
+    .evac-card {
+      background: rgba(0,204,102,0.08); border: 1px solid rgba(0,204,102,0.3);
+      border-radius: 10px; padding: 0.8rem; margin-bottom: 0.6rem; cursor: pointer;
+      transition: all .2s;
+    }
+    .evac-card:hover { background: rgba(0,204,102,0.15); transform: translateX(4px); }
+    .evac-name { font-weight: 700; font-size: 0.88rem; color: var(--green); margin-bottom: 0.3rem; }
+    .evac-info { font-size: 0.75rem; color: var(--dim); line-height: 1.5; }
+    .evac-distance { font-size: 0.8rem; color: var(--accent); font-weight: 600; }
+    .evac-facilities { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.4rem; }
+    .facility-tag {
+      background: rgba(0,204,102,0.15); border: 1px solid rgba(0,204,102,0.4);
+      padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.7rem; color: var(--green);
+    }
+
+    /* TABS */
+    .sidebar-tabs { display: flex; gap: 0.4rem; }
+    .tab-btn {
+      flex: 1; padding: 0.5rem; background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border); border-radius: 8px; color: var(--dim);
+      font-size: 0.78rem; cursor: pointer; transition: all .2s;
+    }
+    .tab-btn.active { background: rgba(0,212,255,0.15); border-color: var(--accent); color: var(--accent); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* FEATURE 4: ALERT COUNT DASHBOARD & FEATURE 3: FILTER */
+    .alert-stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; margin-bottom: 1rem; }
+    .alert-stat-box { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem; text-align: center; }
+    .alert-stat-box .count { font-size: 1.1rem; font-weight: 700; display: block; }
+    .alert-stat-box .label { font-size: 0.65rem; color: var(--dim); text-transform: uppercase; }
+    
+    .filter-container { margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+    .filter-container select { flex: 1; padding: 0.4rem; background: #111; border: 1px solid var(--border); color: var(--text); border-radius: 6px; font-size: 0.8rem; }
+
+    /* FEATURE 7: COPY BUTTON */
+    .copy-btn { 
+      margin-top: 0.5rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); 
+      color: var(--text); padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.7rem; cursor: pointer;
+      transition: background 0.2s;
+    }
+    .copy-btn:hover { background: rgba(255,255,255,0.2); }
+
+    /* FEATURE 6: AI QUICK BUTTONS */
+    .ai-quick-btns { display: flex; gap: 0.4rem; padding: 0.5rem 0.8rem; flex-wrap: wrap; border-top: 1px solid var(--border); }
+    .quick-btn { 
+      background: rgba(124,58,237,0.1); border: 1px solid rgba(124,58,237,0.3); 
+      color: var(--accent2); padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.7rem; cursor: pointer;
+    }
+    .quick-btn:hover { background: rgba(124,58,237,0.2); }
+
+    .empty-state { text-align: center; color: var(--dim); font-size: 0.85rem; padding: 1.5rem 0; }
+
+    /* FEATURE 8: ALERT MARKERS */
+    .alert-marker-pulse {
+        background: rgba(255, 59, 59, 0.6); border-radius: 50%; border: 2px solid #fff;
+        box-shadow: 0 0 0 rgba(255, 59, 59, 0.4); animation: pulse-red 2s infinite;
+    }
+    @keyframes pulse-red {
+        0% { box-shadow: 0 0 0 0 rgba(255, 59, 59, 0.7); }
+        70% { box-shadow: 0 0 0 15px rgba(255, 59, 59, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(255, 59, 59, 0); }
+    }
+
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+      .map-area { height: 300px; }
+    }
+  </style>
+  <script src="api.js"></script>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div style="display:flex;align-items:center;gap:0.8rem">
+    <h1> GravityShift AI</h1>
+    <span style="font-size:0.75rem;color:var(--dim)">User Dashboard</span>
+  </div>
+  <div class="header-right">
+    <span class="status-dot pulse"></span>
+    <span class="status-text">Live Monitoring</span>
+    <span class="clock" id="clock">--:--:--</span>
+    <button class="btn btn-primary" style="font-size:0.78rem;padding:.4rem .9rem" onclick="window.location.href='index.html'">← Home</button>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+
+    <!-- CITY SEARCH -->
+    <div>
+      <div class="section-title"> City Risk Check</div>
+      <div class="city-search">
+        <input id="cityInput" placeholder="Enter city…" onkeydown="if(event.key==='Enter')predictCity()"/>
+        <button class="btn btn-primary" onclick="predictCity()">Check</button>
+      </div>
+    </div>
+
+    <!-- RESULT -->
+    <div id="resultBox" class="result-box hidden">
+      <div class="result-city" id="resCity">--</div>
+      <div style="margin-top:.4rem" id="resRiskBadge"></div>
+      <div class="result-stats">
+        <div class="stat-chip"><div class="val" id="resRain">--</div><div class="lbl">Rain mm</div></div>
+        <div class="stat-chip"><div class="val" id="resHum">--</div><div class="lbl">Humidity %</div></div>
+        <div class="stat-chip"><div class="val" id="resWind">--</div><div class="lbl">Wind m/s</div></div>
+        <div class="stat-chip"><div class="val" id="resTemp">--</div><div class="lbl">Temp °C</div></div>
+      </div>
+      <div style="margin-top:.8rem;font-size:.78rem;color:var(--dim)" id="resDisaster"></div>
+    </div>
+
+    <!-- SOS BUTTON -->
+    <button class="sos-btn" onclick="openSOS()"> Emergency Help</button>
+
+    <!-- EVACUATION CENTER SEARCH -->
+    <div style="border-top:1px solid var(--border);padding-top:1rem">
+      <div class="section-title"> Evacuation Centers</div>
+      <div class="city-search">
+        <input id="evacCity" placeholder="Enter your city…" onkeydown="if(event.key==='Enter')findEvacuationCenters()"/>
+        <button class="btn btn-success" onclick="findEvacuationCenters()">Find</button>
+      </div>
+      <div id="evacResults" style="margin-top:0.8rem;display:none">
+        <div style="font-size:0.85rem;color:var(--text);margin-bottom:0.5rem" id="evacCount"></div>
+        <div id="evacList" style="max-height:200px;overflow-y:auto"></div>
+      </div>
+    </div>
+
+    <!-- TABS -->
+    <div class="sidebar-tabs">
+      <button class="tab-btn active" onclick="switchTab('alerts',this)"> Alerts</button>
+      <button class="tab-btn" onclick="switchTab('rescue',this)">Rescue</button>
+    </div>
+
+    <!-- ALERTS TAB -->
+    <div id="tab-alerts" class="tab-panel active">
+      <div class="section-title">Admin Alerts</div>
+      
+      <!-- FEATURE 4: DASHBOARD STATS -->
+      <div class="alert-stats-grid">
+        <div class="alert-stat-box"><span class="count" id="stat-total">0</span><span class="label">Total</span></div>
+        <div class="alert-stat-box" style="border-color: #ff3b3b;"><span class="count" id="stat-high" style="color:#ff3b3b">0</span><span class="label">High</span></div>
+        <div class="alert-stat-box" style="border-color: #ff9500;"><span class="count" id="stat-med" style="color:#ff9500">0</span><span class="label">Med</span></div>
+        <div class="alert-stat-box" style="border-color: #00cc66;"><span class="count" id="stat-low" style="color:#00cc66">0</span><span class="label">Low</span></div>
+      </div>
+
+      <!-- FEATURE 3: FILTER SYSTEM -->
+      <div class="filter-container">
+        <label style="font-size: 0.75rem; color: var(--dim);">Filter Risk:</label>
+        <select id="riskFilter" onchange="renderFilteredAlerts()">
+          <option value="ALL">ALL LEVELS</option>
+          <option value="HIGH">HIGH RISK</option>
+          <option value="MEDIUM">MEDIUM RISK</option>
+          <option value="LOW">LOW RISK</option>
+        </select>
+      </div>
+
+      <div id="alertsList"><div class="empty-state">No alerts yet</div></div>
+    </div>
+
+    <!-- RESCUE TAB -->
+    <div id="tab-rescue" class="tab-panel">
+      <div class="section-title">Rescue Deployments</div>
+      <div id="rescueList"><div class="empty-state">No rescue teams deployed</div></div>
+    </div>
+
+  </aside>
+
+  <!-- MAP -->
+  <div class="map-area">
+    <div id="map"></div>
+  </div>
+
+</div>
+
+<!-- SOS MODAL -->
+<div id="sosModal" class="overlay hidden">
+  <div class="modal">
+    <h3> Emergency Help Request</h3>
+    <div class="form-group">
+      <label>Your Name *</label>
+      <input id="sosName" placeholder="Full name"/>
+    </div>
+    <div class="form-group">
+      <label>Phone Number *</label>
+      <input id="sosPhone" placeholder="+91XXXXXXXXXX" type="tel"/>
+    </div>
+    <div class="form-group">
+      <label>Family Members</label>
+      <input id="sosFam" placeholder="Number of people" type="number" min="1" value="1"/>
+    </div>
+    <div class="form-group">
+      <label>Full Address (with door number) *</label>
+      <textarea id="sosAddress" rows="2" placeholder="Door no, Street, Area, City"></textarea>
+    </div>
+    <div class="form-group">
+      <label>City</label>
+      <input id="sosCity" placeholder="Your city"/>
+    </div>
+    <div class="form-group">
+      <label>Problem Description *</label>
+      <textarea id="sosProblem" rows="3" placeholder="Describe your emergency situation…"></textarea>
+    </div>
+    <div style="display:flex;gap:.8rem;margin-top:1rem">
+      <button class="btn btn-danger" style="flex:1" onclick="submitSOS()"> Send SOS</button>
+      <button class="btn" style="flex:1;background:rgba(255,255,255,.1)" onclick="closeSOS()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+let leafMap = null;
+let alertMarkers = [];
+let lastAlertId = 0; // FEATURE 1: Tracker for new alerts
+let allAlerts = [];  // Cache for Feature 3 & 4
+
+// Safety wrapper for showToast (Feature 1 fallback)
+function safeShowToast(msg, type) {
+  if (typeof showToast === "function") {
+    showToast(msg, type);
+  } else {
+    console.log(`[TOAST FALLBACK] ${type.toUpperCase()}: ${msg}`);
+    alert(msg);
+  }
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+window.onload = function () {
+  if (typeof startClock === "function") startClock("clock");
+  
+  // Initialize map safely
+  leafMap = initLeafletMap("map");
+  
+  loadAll();
+
+  // FEATURE 5: Faster refresh (5 seconds)
+  setInterval(() => {
+    loadAll();
+  }, 5000);
+
+  // FEATURE 2: Auto Location detection
+  detectUserLocation();
+};
+
+async function loadAll() {
+  console.log("[DEBUG] Refreshing data...");
+  await Promise.all([loadAlerts(), loadRescue()]);
+}
+
+// ── FEATURE 2: AUTO LOCATION ──────────────────────────────────────────────────
+function detectUserLocation() {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(position => {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      console.log(`[DEBUG] User location detected: ${lat}, ${lng}`);
+      
+      // Mock reverse geocoding for demonstration
+      // In a real app, you'd call a reverse-geo API here
+      if (lat > 12.9 && lat < 13.2 && lng > 80.1 && lng < 80.4) {
+        document.getElementById("cityInput").value = "Chennai";
+        document.getElementById("evacCity").value = "Chennai";
+      }
+    }, error => {
+      console.warn("[DEBUG] Geolocation access denied.");
+    });
+  }
+}
+
+// ── PREDICT ───────────────────────────────────────────────────────────────────
+async function predictCity() {
+  const inputEl = document.getElementById("cityInput");
+  if (!inputEl) return;
+  const city = inputEl.value.trim();
+  if (!city) return;
+
+  try {
+    const d = await apiGet(`/predict/${encodeURIComponent(city)}`);
+    const resBox = document.getElementById("resultBox");
+    if (resBox) resBox.classList.remove("hidden");
+
+    document.getElementById("resCity").textContent = d.city || "--";
+    document.getElementById("resRain").textContent = d.rain || "--";
+    document.getElementById("resHum").textContent = d.humidity || "--";
+    document.getElementById("resWind").textContent = d.wind || "--";
+    document.getElementById("resTemp").textContent = d.temperature || "--";
+    document.getElementById("resDisaster").textContent = `⚠ Disaster Type: ${d.disaster || "None"}`;
+    
+    const badge = document.getElementById("resRiskBadge");
+    if (badge) {
+      badge.innerHTML = `<span class="risk-badge risk-${d.risk || 'LOW'}">${d.risk || 'LOW'} RISK</span>`;
+    }
+
+    if (d.risk === "HIGH") {
+      safeShowToast(`HIGH RISK in ${d.city}!`, "error");
+    }
+  } catch (e) {
+    console.error("[DEBUG] Predict error:", e);
+    safeShowToast("City not found or backend offline", "error");
+  }
+}
+
+// ── ALERTS ────────────────────────────────────────────────────────────────────
+async function loadAlerts() {
+  try {
+    const data = await apiGet("/alerts", false) || [];
+
+    // FEATURE 5: Optimize rendering (skip if no changes)
+    if (JSON.stringify(data) === JSON.stringify(allAlerts)) return;
+
+    // FEATURE 1: Detection of new alerts
+    if (allAlerts.length > 0 && data.length > allAlerts.length) {
+      const newest = data[data.length - 1];
+      if (newest && newest.id > lastAlertId) {
+        safeShowToast(`🚨 NEW ALERT: ${newest.risk} Risk in ${newest.city}!`, "error");
+        lastAlertId = newest.id;
+      }
+    } else if (data.length > 0 && lastAlertId === 0) {
+      lastAlertId = data[data.length - 1].id;
+    }
+
+    allAlerts = data;
+    updateAlertStats();
+    renderFilteredAlerts();
+    updateAlertMarkers(); // FEATURE 8
+  } catch (e) {
+    console.error("[DEBUG] LoadAlerts failed", e);
+  }
+}
+
+function renderFilteredAlerts() {
+  const filterEl = document.getElementById("riskFilter");
+  const filter = filterEl ? filterEl.value : "ALL";
+  const box = document.getElementById("alertsList");
+  if (!box) return;
+
+  const filtered = filter === "ALL" 
+    ? allAlerts 
+    : allAlerts.filter(a => a.risk === filter);
+
+  if (!filtered.length) {
+    box.innerHTML = '<div class="empty-state">No alerts for this level</div>';
+    return;
+  }
+
+  box.innerHTML = filtered.slice().reverse().map(a => `
+    <div class="alert-card ${a.risk || 'LOW'}">
+      <div class="alert-card-top">
+        <span class="alert-city-name">${a.city || 'Unknown'}</span>
+        <span class="risk-badge risk-${a.risk || 'LOW'}">${a.risk || 'LOW'}</span>
+      </div>
+      <div class="alert-msg">${a.message || 'No message'}</div>
+      <div class="alert-period">${a.start_time || ''} → ${a.end_time || ''}</div>
+      <div class="alert-time">Sent: ${a.sent_at || ''}</div>
+      <button class="copy-btn" onclick="copyAlertText('${(a.city || 'Alert')}: ${(a.message || '').replace(/'/g, "\\'")}')">📋 Copy Message</button>
+    </div>`).join("");
+}
+
+// FEATURE 4: UPDATE STATS
+function updateAlertStats() {
+  const totalEl = document.getElementById("stat-total");
+  if (totalEl) {
+    totalEl.textContent = allAlerts.length;
+    document.getElementById("stat-high").textContent = allAlerts.filter(a => a.risk === "HIGH").length;
+    document.getElementById("stat-med").textContent = allAlerts.filter(a => a.risk === "MEDIUM").length;
+    document.getElementById("stat-low").textContent = allAlerts.filter(a => a.risk === "LOW").length;
+  }
+}
+
+// FEATURE 7: CLIPBOARD API
+async function copyAlertText(text) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      safeShowToast("Message copied to clipboard", "success");
+    } else {
+      throw new Error("Clipboard API unavailable");
+    }
+  } catch (err) {
+    // Fallback for older browsers or insecure contexts
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    document.body.appendChild(textArea);
+    textArea.select();
+    try {
+      document.execCommand('copy');
+      safeShowToast("Message copied (fallback)", "success");
+    } catch (e) {
+      console.error('Copy fallback failed', e);
+    }
+    document.body.removeChild(textArea);
+  }
+}
+
+// FEATURE 8: MAP MARKERS FOR ALERTS
+function updateAlertMarkers() {
+  if (!leafMap) return;
+  
+  // Clear old markers
+  alertMarkers.forEach(m => leafMap.removeLayer(m));
+  alertMarkers = [];
+
+  allAlerts.forEach(a => {
+    let lat = a.lat, lng = a.lng;
+
+    // Mock logic if lat/lng is missing
+    if (!lat || !lng) {
+      const cityName = (a.city || "").toLowerCase();
+      if (cityName === "chennai") { lat = 13.0827; lng = 80.2707; }
+      else if (cityName === "mumbai") { lat = 19.0760; lng = 72.8777; }
+    }
+
+    if (lat && lng) {
+      const marker = L.marker([lat, lng], {
+        icon: L.divIcon({
+          className: 'alert-marker-pulse',
+          html: `<div style="width:12px;height:12px"></div>`,
+          iconSize: [16, 16]
+        })
+      }).addTo(leafMap);
+
+      marker.bindPopup(`
+        <b style="color:#ff3b3b">⚠ ${a.risk || 'RISK'}</b><br>
+        <b>${a.city || 'Unknown'}</b><br>${a.message || ''}
+      `);
+      alertMarkers.push(marker);
+    }
+  });
+}
+
+// ── RESCUE ────────────────────────────────────────────────────────────────────
+async function loadRescue() {
+  try {
+    const teams = await apiGet("/rescue-list") || [];
+    const box = document.getElementById("rescueList");
+    if (!box) return;
+    
+    if (!teams.length) {
+      box.innerHTML = '<div class="empty-state">No rescue teams deployed</div>';
+      return;
+    }
+
+    box.innerHTML = teams.slice().reverse().map(t => `
+      <div class="rescue-card">
+        <div class="rescue-team">🛡 ${t.team_name}</div>
+        <div class="rescue-info">
+          Head: ${t.head_name} | Members: ${t.members}<br>
+          Location: ${t.location} | Contact: ${t.phone}<br>
+          First Aid: ${t.first_aid} | Food: ${t.food_ready}
+        </div>
+      </div>`).join("");
+  } catch (e) {
+    console.error("[DEBUG] LoadRescue failed", e);
+  }
+}
+
+// ── SOS ───────────────────────────────────────────────────────────────────────
+function openSOS() {
+  const city = document.getElementById("cityInput").value.trim();
+  if (city) document.getElementById("sosCity").value = city;
+  document.getElementById("sosModal").classList.remove("hidden");
+}
+function closeSOS() { document.getElementById("sosModal").classList.add("hidden"); }
+
+async function submitSOS() {
+  const payload = {
+    name:           document.getElementById("sosName").value.trim(),
+    phone:          document.getElementById("sosPhone").value.trim(),
+    family_members: parseInt(document.getElementById("sosFam").value) || 1,
+    address:        document.getElementById("sosAddress").value.trim(),
+    city:           document.getElementById("sosCity").value.trim(),
+    problem:        document.getElementById("sosProblem").value.trim(),
+  };
+  if (!payload.name || !payload.phone || !payload.address || !payload.problem) {
+    safeShowToast("Please fill all required fields", "error"); return;
+  }
+  try {
+    const res = await apiPost("/sos", payload);
+    safeShowToast(` SOS #${res.sos_id} sent to admin!`, "success");
+    closeSOS();
+  } catch (e) {
+    safeShowToast(e.message || "Failed to send SOS", "error");
+  }
+}
+
+// ── TABS ──────────────────────────────────────────────────────────────────────
+function switchTab(name, btn) {
+  document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById(`tab-${name}`).classList.add("active");
+  btn.classList.add("active");
+}
+
+// ── EVACUATION CENTERS ──────────────────────────────────────────────────────────
+let evacuationCenters = [];
+let userLocation = null;
+let routePolyline = null;
+let centerMarkers = [];
+
+async function findEvacuationCenters() {
+  const city = document.getElementById("evacCity").value.trim();
+  if (!city) {
+    showToast("Enter your city name", "error");
+    return;
+  }
+  
+  // Try to get user's current location
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        userLocation = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        };
+        await loadEvacuationCenters(city, userLocation);
+      },
+      async (error) => {
+        // If location denied, load without distance calculation
+        await loadEvacuationCenters(city, null);
+      }
+    );
+  } else {
+    await loadEvacuationCenters(city, null);
+  }
+}
+
+async function loadEvacuationCenters(city, location) {
+  try {
+    let url = `/evacuation-centers?city=${encodeURIComponent(city)}`;
+    if (location) {
+      url += `&lat=${location.lat}&lng=${location.lng}`;
+    }
+    
+    const data = await apiGet(url);
+    evacuationCenters = data.centers;
+    
+    // Display results
+    document.getElementById("evacResults").style.display = "block";
+    document.getElementById("evacCount").textContent = 
+      ` Found ${data.total_centers} evacuation center(s) in ${data.city}`;
+    
+    const listBox = document.getElementById("evacList");
+    listBox.innerHTML = evacuationCenters.map((center, idx) => `
+      <div class="evac-card" onclick="showEvacuationRoute(${idx})">
+        <div class="evac-name"> ${center.name}</div>
+        <div class="evac-info">
+          Capacity: ${center.capacity} people
+          ${center.distance_km ? `<br><span class="evac-distance"> ${center.distance_km} km away</span>` : ''}
+        </div>
+        <div class="evac-facilities">
+          ${center.facilities.map(f => `<span class="facility-tag">${f}</span>`).join('')}
+        </div>
+      </div>
+    `).join("");
+    
+    // Show all centers on map
+    displayEvacuationCentersOnMap();
+    
+    showToast(` Found ${data.total_centers} evacuation centers`, "success");
+  } catch (e) {
+    showToast(e.message || "No evacuation centers found", "error");
+  }
+}
+
+function displayEvacuationCentersOnMap() {
+  // Clear existing markers
+  centerMarkers.forEach(m => leafMap.removeLayer(m));
+  centerMarkers = [];
+  
+  // Add user location marker if available
+  if (userLocation) {
+    const userMarker = L.marker([userLocation.lat, userLocation.lng], {
+      icon: L.divIcon({
+        className: 'user-marker',
+        html: '<div style="background:#00d4ff;width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 10px rgba(0,212,255,0.8)"></div>',
+        iconSize: [16, 16]
+      })
+    }).addTo(leafMap);
+    userMarker.bindPopup("<b>Your Location</b>");
+    centerMarkers.push(userMarker);
+  }
+  
+  // Add evacuation center markers
+  evacuationCenters.forEach((center, idx) => {
+    const marker = L.marker([center.lat, center.lng], {
+      icon: L.divIcon({
+        className: 'evac-marker',
+        html: '<div style="background:#00cc66;width:20px;height:20px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 10px rgba(0,204,102,0.8);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:bold">' + (idx + 1) + '</div>',
+        iconSize: [20, 20]
+      })
+    }).addTo(leafMap);
+    
+    marker.bindPopup(`
+      <b>${center.name}</b><br>
+      Capacity: ${center.capacity}<br>
+      ${center.distance_km ? `Distance: ${center.distance_km} km<br>` : ''}
+      Facilities: ${center.facilities.join(', ')}
+    `);
+    
+    centerMarkers.push(marker);
+  });
+  
+  // Fit map to show all markers
+  if (centerMarkers.length > 0) {
+    const group = L.featureGroup(centerMarkers);
+    leafMap.fitBounds(group.getBounds().pad(0.1));
+  }
+}
+
+function showEvacuationRoute(index) {
+  const center = evacuationCenters[index];
+  
+  if (!userLocation) {
+    showToast("⚠ Enable location to see route", "info");
+    // Just zoom to the center
+    leafMap.setView([center.lat, center.lng], 14);
+    return;
+  }
+  
+  // Remove existing route
+  if (routePolyline) {
+    leafMap.removeLayer(routePolyline);
+  }
+  
+  // Draw route line (straight line for now)
+  routePolyline = L.polyline(
+    [
+      [userLocation.lat, userLocation.lng],
+      [center.lat, center.lng]
+    ],
+    {
+      color: '#00cc66',
+      weight: 4,
+      opacity: 0.7,
+      dashArray: '10, 10'
+    }
+  ).addTo(leafMap);
+  
+  // Fit map to show route
+  leafMap.fitBounds(routePolyline.getBounds().pad(0.1));
+  
+  showToast(` Route to ${center.name} (${center.distance_km} km)`, "success");
+}
+</script>
+
+<!-- FLOATING AI CHATBOT -->
+<div id="aiChatbot" style="position:fixed;bottom:20px;right:20px;width:340px;z-index:9999">
+  <div id="chatToggle" onclick="toggleChat()" style="background:linear-gradient(135deg,#7c3aed,#00d4ff);border-radius:50%;width:56px;height:56px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 20px rgba(124,58,237,0.4);margin-left:auto">
+    <span style="font-size:28px"></span>
+  </div>
+  <div id="chatWindow" class="hidden" style="background:#0d1b2e;border:1px solid var(--border);border-radius:16px;margin-top:10px;box-shadow:0 8px 32px rgba(0,0,0,0.6);max-height:450px;display:flex;flex-direction:column">
+    <div style="padding:1rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <div style="font-family:var(--title);color:var(--accent);font-size:0.9rem">🤖 Disaster AI Assistant</div>
+      <button onclick="toggleChat()" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:1.2rem">×</button>
+    </div>
+    <!-- FEATURE 6: AI QUICK BUTTONS -->
+    <div class="ai-quick-btns">
+      <button class="quick-btn" onclick="sendQuickAI('Flood Safety')">🌊 Flood Safety</button>
+      <button class="quick-btn" onclick="sendQuickAI('Cyclone Tips')">🌪 Cyclone Tips</button>
+      <button class="quick-btn" onclick="sendQuickAI('Emergency Steps')">🆘 Emergency Steps</button>
+    </div>
+    <div id="chatMessages" style="flex:1;padding:1rem;overflow-y:auto;max-height:280px;font-size:0.85rem"></div>
+    <div style="padding:0.8rem;border-top:1px solid var(--border);display:flex;gap:0.5rem">
+      <input id="chatInput" placeholder="Ask about disasters..." onkeydown="if(event.key==='Enter')sendChatMessage()" style="flex:1;padding:0.6rem;font-size:0.85rem"/>
+      <button onclick="sendChatMessage()" class="btn btn-primary" style="padding:0.6rem 1rem;font-size:0.85rem">➤</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── AI CHATBOT ────────────────────────────────────────────────────────────────
+function toggleChat() {
+  const win = document.getElementById("chatWindow");
+  win.classList.toggle("hidden");
+  if (!win.classList.contains("hidden")) {
+    document.getElementById("chatInput").focus();
+    if (document.getElementById("chatMessages").children.length === 0) {
+      addChatMessage("bot", "Hi! I can help with disaster safety, evacuation routes, and emergency contacts. What do you need?");
+    }
+  }
+}
+
+// FEATURE 6: QUICK BUTTON HANDLER
+function sendQuickAI(topic) {
+    document.getElementById("chatInput").value = `Give me immediate ${topic} instructions.`;
+    sendChatMessage();
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById("chatInput");
+  const query = input.value.trim();
+  if (!query) return;
+  
+  addChatMessage("user", query);
+  input.value = "";
+  
+  try {
+    const res = await apiPost("/ai-chat", { query });
+    addChatMessage("bot", res.response);
+  } catch (e) {
+    addChatMessage("bot", " Sorry, I'm having trouble connecting. Try again.");
+  }
+}
+
+function addChatMessage(type, text) {
+  const box = document.getElementById("chatMessages");
+  const msg = document.createElement("div");
+  msg.style.marginBottom = "0.8rem";
+  msg.style.padding = "0.7rem";
+  msg.style.borderRadius = "10px";
+  msg.style.lineHeight = "1.5";
+  
+  if (type === "user") {
+    msg.style.background = "rgba(0,212,255,0.15)";
+    msg.style.border = "1px solid rgba(0,212,255,0.3)";
+    msg.style.color = "var(--text)";
+    msg.style.marginLeft = "2rem";
+  } else {
+    msg.style.background = "rgba(124,58,237,0.15)";
+    msg.style.border = "1px solid rgba(124,58,237,0.3)";
+    msg.style.color = "var(--text)";
+    msg.style.marginRight = "2rem";
+  }
+  
+  msg.textContent = text;
+  box.appendChild(msg);
+  box.scrollTop = box.scrollHeight;
+}
+</script>
+</body>
+</html>

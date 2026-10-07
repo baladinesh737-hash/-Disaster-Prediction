@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GravityShift AI – Government Dashboard</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+  <script src="api.js"></script>
+  <style>
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 2rem; background: rgba(5,10,20,0.95);
+      border-bottom: 2px solid var(--accent2); position: sticky; top: 0; z-index: 100;
+    }
+    .header h1 { font-family: var(--title); font-size: 1.2rem; color: var(--accent2); }
+    .clock { font-family: var(--title); font-size: .85rem; color: var(--accent); }
+
+    .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem; }
+
+    /* HERO STATS */
+    .hero-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 1rem; }
+    .hero-stat {
+      background: var(--glass); border: 1px solid var(--border); border-radius: 16px;
+      padding: 1.2rem; text-align: center;
+    }
+    .hero-stat .big { font-family: var(--title); font-size: 2rem; }
+    .hero-stat .lbl { font-size: .75rem; color: var(--dim); margin-top: .3rem; }
+
+    /* REQUEST CARDS */
+    .req-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px,1fr)); gap: 1rem; }
+    .req-card {
+      background: var(--glass); border: 1px solid var(--border); border-radius: 16px; padding: 1.2rem;
+      transition: transform .2s;
+    }
+    .req-card:hover { transform: translateY(-3px); }
+    .req-card.accommodation { border-color: rgba(0,212,255,.4); }
+    .req-card.hospital      { border-color: rgba(255,59,59,.4); }
+    .req-card.permission    { border-color: rgba(124,58,237,.4); }
+
+    .req-type {
+      display: inline-block; padding: .25rem .8rem; border-radius: 20px;
+      font-size: .75rem; font-weight: 700; margin-bottom: .7rem;
+    }
+    .req-type.accommodation { background: rgba(0,212,255,.15); color: var(--accent); }
+    .req-type.hospital      { background: rgba(255,59,59,.15);  color: var(--red); }
+    .req-type.permission    { background: rgba(124,58,237,.15); color: var(--accent2); }
+
+    .req-city { font-family: var(--title); font-size: 1rem; margin-bottom: .5rem; }
+    .req-detail { font-size: .82rem; color: var(--dim); line-height: 1.6; }
+    .req-status {
+      margin-top: .8rem; display: flex; justify-content: space-between; align-items: center;
+    }
+    .status-pill {
+      padding: .2rem .7rem; border-radius: 10px; font-size: .72rem; font-weight: 700;
+      background: rgba(255,149,0,.15); color: var(--orange); border: 1px solid var(--orange);
+    }
+    .approve-btn {
+      padding: .35rem .9rem; background: var(--green); border: none; border-radius: 8px;
+      color: #fff; font-size: .78rem; cursor: pointer; transition: opacity .2s;
+    }
+    .approve-btn:hover { opacity: .8; }
+    .approve-btn:disabled { opacity: .4; cursor: default; }
+
+    /* HIGH RISK DISTRICTS */
+    .high-risk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); gap: .8rem; }
+    .high-card {
+      background: rgba(255,59,59,.08); border: 1px solid rgba(255,59,59,.3);
+      border-radius: 12px; padding: 1rem;
+    }
+    .high-city { font-weight: 700; font-size: .95rem; color: var(--red); }
+    .high-stats { font-size: .75rem; color: var(--dim); margin-top: .4rem; line-height: 1.6; }
+
+    #govMap { width: 100%; height: 360px; border-radius: 12px; }
+
+    .empty-state { text-align: center; color: var(--dim); font-size: .85rem; padding: 2rem 0; }
+
+    @media (max-width: 600px) {
+      .hero-stats { grid-template-columns: repeat(2,1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div style="display:flex;align-items:center;gap:.8rem">
+    <h1>🏛 GOVERNMENT DASHBOARD</h1>
+    <span style="font-size:.72rem;color:var(--dim)">National Disaster Management Authority</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:1rem">
+    <span class="clock" id="clock">--:--:--</span>
+    <button class="btn btn-primary" style="font-size:.78rem;padding:.4rem .9rem" onclick="window.location.href='index.html'">← Home</button>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- HERO STATS -->
+  <div class="hero-stats">
+    <div class="hero-stat">
+      <div class="big" id="stHigh" style="color:var(--red)">--</div>
+      <div class="lbl">HIGH Risk Districts</div>
+    </div>
+    <div class="hero-stat">
+      <div class="big" id="stRequests" style="color:var(--accent2)">--</div>
+      <div class="lbl">Gov Requests</div>
+    </div>
+    <div class="hero-stat">
+      <div class="big" id="stApproved" style="color:var(--green)">0</div>
+      <div class="lbl">Approved</div>
+    </div>
+    <div class="hero-stat">
+      <div class="big" id="stPending" style="color:var(--orange)">--</div>
+      <div class="lbl">Pending Action</div>
+    </div>
+  </div>
+
+  <!-- MAP -->
+  <div class="glass">
+    <div class="section-title">🗺 Live Risk Map – Tamil Nadu</div>
+    <div id="govMap"></div>
+  </div>
+
+  <!-- HIGH RISK DISTRICTS -->
+  <div class="glass">
+    <div class="section-title">🔴 High Risk Districts</div>
+    <div id="highRiskGrid" class="high-risk-grid">
+      <div class="empty-state">Loading…</div>
+    </div>
+  </div>
+
+  <!-- GOVERNMENT REQUESTS -->
+  <div class="glass">
+    <div class="section-title">📋 Government Requests from Admin</div>
+    <div id="govRequests" class="req-grid">
+      <div class="empty-state">No requests yet. Requests appear when admin sends HIGH risk government alerts.</div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+let leafMap;
+let approvedCount = 0;
+
+window.onload = function () {
+  startClock("clock");
+  leafMap = initLeafletMap("govMap");
+  loadAll();
+  setInterval(loadAll, 20000);
+};
+
+async function loadAll() {
+  await Promise.all([loadDistricts(), loadGovRequests()]);
+}
+
+async function loadDistricts() {
+  try {
+    const data = await apiGet("/all");
+    plotDistricts(leafMap, data);
+    const high = data.filter(d => d.risk === "HIGH");
+    document.getElementById("stHigh").textContent = high.length;
+
+    const grid = document.getElementById("highRiskGrid");
+    if (!high.length) {
+      grid.innerHTML = '<div class="empty-state">No HIGH risk districts currently</div>';
+      return;
+    }
+    grid.innerHTML = high.map(d => `
+      <div class="high-card">
+        <div class="high-city">🔴 ${d.city}</div>
+        <div class="high-stats">
+          Rain: ${d.rain} mm<br>
+          Humidity: ${d.humidity}%<br>
+          Wind: ${d.wind} m/s<br>
+          Disaster: ${d.disaster}<br>
+          Probability: ${(d.probability * 100).toFixed(0)}%
+        </div>
+      </div>`).join("");
+  } catch (e) {}
+}
+
+async function loadGovRequests() {
+  try {
+    const list = await apiGet("/government-list");
+    document.getElementById("stRequests").textContent = list.length;
+    document.getElementById("stPending").textContent = list.filter(r => r.status === "SUBMITTED").length;
+
+    const box = document.getElementById("govRequests");
+    if (!list.length) {
+      box.innerHTML = '<div class="empty-state">No requests yet.</div>';
+      return;
+    }
+    box.innerHTML = list.slice().reverse().map((r, i) => `
+      <div class="req-card ${r.request_type}">
+        <span class="req-type ${r.request_type}">${typeIcon(r.request_type)} ${r.request_type.toUpperCase()}</span>
+        <div class="req-city">📍 ${r.city}</div>
+        <div class="req-detail">${r.details}</div>
+        <div class="req-detail" style="margin-top:.4rem">Submitted: ${r.submitted_at}</div>
+        <div class="req-status">
+          <span class="status-pill" id="status-${r.id}">${r.status}</span>
+          <button class="approve-btn" id="btn-${r.id}"
+            onclick="approveRequest(${r.id})"
+            ${r.status === 'APPROVED' ? 'disabled' : ''}>
+            ${r.status === 'APPROVED' ? '✓ Approved' : 'Approve'}
+          </button>
+        </div>
+      </div>`).join("");
+  } catch (e) {}
+}
+
+function typeIcon(type) {
+  return type === "accommodation" ? "🏠" : type === "hospital" ? "🏥" : "📋";
+}
+
+function approveRequest(id) {
+  const pill = document.getElementById(`status-${id}`);
+  const btn  = document.getElementById(`btn-${id}`);
+  if (pill) { pill.textContent = "APPROVED"; pill.style.background = "rgba(0,204,102,.2)"; pill.style.color = "var(--green)"; pill.style.borderColor = "var(--green)"; }
+  if (btn)  { btn.textContent = "✓ Approved"; btn.disabled = true; }
+  approvedCount++;
+  document.getElementById("stApproved").textContent = approvedCount;
+  showToast(`✅ Request #${id} approved`, "success");
+}
+</script>
+</body>
+</html>
